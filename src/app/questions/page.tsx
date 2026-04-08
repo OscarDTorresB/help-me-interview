@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { ChevronDown, ChevronUp, RefreshCw, Search, Shuffle } from 'lucide-react'
 
 type Level = 'mid' | 'senior'
 
@@ -143,6 +144,53 @@ const questions: Question[] = [
 ]
 
 const TOPICS = [...new Set(questions.map(q => q.topic))]
+const DEFAULT_RANDOM_COUNT = 6
+
+function shuffleQuestions(pool: Question[]) {
+  const shuffled = [...pool]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+
+  return shuffled
+}
+
+function getQuestionsForSelection(level: Level, topics: string[]) {
+  return questions.filter(
+    question => question.level === level && topics.includes(question.topic)
+  )
+}
+
+function getReplacementQuestion(
+  level: Level,
+  topic: string,
+  currentId: number,
+  excludedIds: number[] = []
+) {
+  const preferredPool = questions.filter(
+    question =>
+      question.level === level &&
+      question.topic === topic &&
+      question.id !== currentId &&
+      !excludedIds.includes(question.id)
+  )
+
+  if (preferredPool.length > 0) {
+    return preferredPool[Math.floor(Math.random() * preferredPool.length)]
+  }
+
+  const fallbackPool = questions.filter(
+    question => question.level === level && question.topic === topic && question.id !== currentId
+  )
+
+  if (fallbackPool.length === 0) {
+    return null
+  }
+
+  return fallbackPool[Math.floor(Math.random() * fallbackPool.length)]
+}
 
 const topicColors: Record<string, string> = {
   'JS Core': 'bg-amber-50 text-amber-800 border-amber-200',
@@ -169,7 +217,7 @@ function QuestionCard({ q }: { q: Question }) {
         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${topicColors[q.topic] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
           {q.topic}
         </span>
-        <p className="text-sm text-gray-900 leading-relaxed flex-1 min-w-[200px]">{q.q}</p>
+        <p className="text-sm text-gray-900 leading-relaxed flex-1 min-w-50">{q.q}</p>
       </div>
       {open && (
         <div className="mt-3 pt-3 border-t border-gray-100">
@@ -187,10 +235,71 @@ function QuestionCard({ q }: { q: Question }) {
   )
 }
 
+function GeneratedQuestionCard({
+  question,
+  canReplace,
+  onReplace,
+}: {
+  question: Question
+  canReplace: boolean
+  onReplace: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300">
+      <div className="flex items-start gap-3">
+        <span
+          className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${topicColors[question.topic] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}
+        >
+          {question.topic}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm leading-relaxed text-slate-900">{question.q}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onReplace}
+              disabled={!canReplace}
+              className="h-7 px-2.5"
+            >
+              <RefreshCw className="size-3.5" />
+              Replace
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setOpen(openState => !openState)}
+              className="h-7 px-2.5 text-slate-500 hover:text-slate-700"
+            >
+              {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              {open ? 'Hide hint' : 'Show hint'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <p className="text-xs leading-relaxed text-slate-500">
+            <span className="font-medium text-slate-600">Hint: </span>
+            {question.hint}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [level, setLevel] = useState<Level>('mid')
   const [topic, setTopic] = useState('All')
   const [search, setSearch] = useState('')
+  const [selectedTopics, setSelectedTopics] = useState<string[]>(TOPICS)
+  const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([])
 
   const levelTopics = ['All', ...TOPICS.filter(t =>
     questions.some(q => q.level === level && q.topic === t)
@@ -206,73 +315,263 @@ export default function App() {
     return true
   })
 
+  const selectedPool = getQuestionsForSelection(level, selectedTopics)
+
+  function handleGenerate() {
+    if (selectedPool.length === 0) {
+      setGeneratedQuestions([])
+      return
+    }
+
+    setGeneratedQuestions(
+      shuffleQuestions(selectedPool).slice(0, Math.min(DEFAULT_RANDOM_COUNT, selectedPool.length))
+    )
+  }
+
+  function handleReplaceQuestion(index: number) {
+    setGeneratedQuestions(currentQuestions => {
+      const currentQuestion = currentQuestions[index]
+
+      if (!currentQuestion) {
+        return currentQuestions
+      }
+
+      const replacement = getReplacementQuestion(
+        level,
+        currentQuestion.topic,
+        currentQuestion.id,
+        currentQuestions
+          .filter((_, currentIndex) => currentIndex !== index)
+          .map(question => question.id)
+      )
+
+      if (!replacement) {
+        return currentQuestions
+      }
+
+      const nextQuestions = [...currentQuestions]
+      nextQuestions[index] = replacement
+      return nextQuestions
+    })
+  }
+
+  function toggleTopicSelection(selectedTopic: string) {
+    setSelectedTopics(currentTopics =>
+      currentTopics.includes(selectedTopic)
+        ? currentTopics.filter(topicName => topicName !== selectedTopic)
+        : [...currentTopics, selectedTopic]
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">JS / TS Interview Question Bank</h1>
-          <p className="text-sm text-gray-500 mt-1">{questions.filter(q => q.level === 'mid').length} middle · {questions.filter(q => q.level === 'senior').length} senior · {TOPICS.length} topics</p>
-        </div>
-
-        {/* Level tabs */}
-        <div className="flex gap-2 mb-4">
-          {(['mid', 'senior'] as Level[]).map(lv => (
-            <button
-              key={lv}
-              onClick={() => { setLevel(lv); setTopic('All') }}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-                level === lv
-                  ? lv === 'mid'
-                    ? 'bg-blue-50 text-blue-800 border-blue-200'
-                    : 'bg-violet-50 text-violet-800 border-violet-200'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {lv === 'mid' ? 'Middle' : 'Senior'}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="relative mb-4">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search questions..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-8 h-9 text-sm bg-white"
-          />
-        </div>
-
-        {/* Topic chips */}
-        <div className="flex flex-wrap gap-1.5 mb-5">
-          {levelTopics.map(t => (
-            <button
-              key={t}
-              onClick={() => setTopic(t)}
-              className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                topic === t
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        {/* Count */}
-        <p className="text-xs text-gray-400 mb-3">{filtered.length} question{filtered.length !== 1 ? 's' : ''}</p>
-
-        {/* Questions */}
-        {filtered.length === 0 ? (
-          <div className="text-center py-12 text-sm text-gray-400">No questions match your filters.</div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {filtered.map(q => <QuestionCard key={q.id} q={q} />)}
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(241,245,249,0.95),white_45%)] font-sans">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="mb-8 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+            Help Me Interview
+          </p>
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                JS / TS Interview Question Bank
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Generate a random interview list from selected topics, then replace any question with another from the same topic.
+              </p>
+            </div>
+            <p className="text-sm text-slate-500">
+              {questions.filter(q => q.level === 'mid').length} middle · {questions.filter(q => q.level === 'senior').length} senior · {TOPICS.length} topics
+            </p>
           </div>
+        </div>
+
+        <section className="mb-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Random list
+                </p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+                  Generate questions on demand
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                  Choose the topics that are allowed, then generate a mixed list for the current level. Replace any question with another from the same topic at any time.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => setSelectedTopics(TOPICS)}>
+                  Select all topics
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedTopics([])}>
+                  Clear selection
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 lg:max-w-xs">
+              <p className="font-medium text-slate-900">Current selection</p>
+              <p className="mt-1">
+                {selectedTopics.length === 0
+                  ? 'No topics selected.'
+                  : `${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} selected, ${selectedPool.length} question${selectedPool.length === 1 ? '' : 's'} available.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {TOPICS.map(topicName => {
+              const isSelected = selectedTopics.includes(topicName)
+
+              return (
+                <button
+                  key={topicName}
+                  type="button"
+                  onClick={() => toggleTopicSelection(topicName)}
+                  aria-pressed={isSelected}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isSelected
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
+                  }`}
+                >
+                  {topicName}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">
+              {selectedTopics.length === 0
+                ? 'Select at least one topic to generate a list.'
+                : `Generate up to ${Math.min(DEFAULT_RANDOM_COUNT, selectedPool.length)} question${Math.min(DEFAULT_RANDOM_COUNT, selectedPool.length) === 1 ? '' : 's'} from the selected topics.`}
+            </p>
+            <Button
+              type="button"
+              size="lg"
+              onClick={handleGenerate}
+              disabled={selectedPool.length === 0}
+              className="w-full sm:w-auto"
+            >
+              <Shuffle className="size-4" />
+              Generate random list
+            </Button>
+          </div>
+        </section>
+
+        {generatedQuestions.length > 0 && (
+          <section className="mb-8 space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Random questions
+                </p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+                  Your generated list
+                </h2>
+              </div>
+              <p className="text-sm text-slate-500">
+                {generatedQuestions.length} question{generatedQuestions.length === 1 ? '' : 's'} in the current list.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {generatedQuestions.map((generatedQuestion, index) => (
+                <GeneratedQuestionCard
+                  key={generatedQuestion.id}
+                  question={generatedQuestion}
+                  canReplace={questions.some(
+                    question =>
+                      question.level === level &&
+                      question.topic === generatedQuestion.topic &&
+                      question.id !== generatedQuestion.id
+                  )}
+                  onReplace={() => handleReplaceQuestion(index)}
+                />
+              ))}
+            </div>
+          </section>
         )}
+
+        <section>
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Question bank
+              </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+                Browse and filter the full set
+              </h2>
+            </div>
+            <p className="text-sm text-slate-500">
+              {filtered.length} question{filtered.length === 1 ? '' : 's'} match your filters.
+            </p>
+          </div>
+
+          <div className="mb-4 flex gap-2">
+            {(['mid', 'senior'] as Level[]).map(lv => (
+              <button
+                key={lv}
+                type="button"
+                onClick={() => {
+                  setLevel(lv)
+                  setTopic('All')
+                  setGeneratedQuestions([])
+                }}
+                className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+                  level === lv
+                    ? lv === 'mid'
+                      ? 'border-sky-200 bg-sky-50 text-sky-800'
+                      : 'border-violet-200 bg-violet-50 text-violet-800'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                {lv === 'mid' ? 'Middle' : 'Senior'}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative mb-4">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search questions..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-10 bg-white pl-8 text-sm"
+            />
+          </div>
+
+          <div className="mb-5 flex flex-wrap gap-1.5">
+            {levelTopics.map(topicName => (
+              <button
+                key={topicName}
+                type="button"
+                onClick={() => setTopic(topicName)}
+                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                  topic === topicName
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                {topicName}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-12 text-center text-sm text-slate-400">
+              No questions match your filters.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filtered.map(question => (
+                <QuestionCard key={question.id} q={question} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

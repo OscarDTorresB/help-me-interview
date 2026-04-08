@@ -11,7 +11,7 @@ export const interviewTools: InterviewTool[] = [
     id: "interview-questions",
     title: "Interview Questions",
     description:
-      "Browse practical technical interview questions with concise model answers for interviewers.",
+      "Browse practical technical interview questions, or generate a random topic-based list with one click.",
     href: "/questions",
     status: "available",
   },
