@@ -8,7 +8,6 @@ import {
   TOPICS,
   topicColors,
   shuffleQuestions,
-  getReplacementQuestion,
   copyToClipboard,
   type Level,
   type Question,
@@ -188,7 +187,23 @@ export default function GeneratorPage() {
         return currentQuestions
       }
 
-      const replacement = getReplacementQuestion(generatorLevel, currentQuestion.topic, currentQuestion.id)
+      const usedIds = new Set(currentQuestions.map(question => question.id))
+      usedIds.delete(currentQuestion.id)
+
+      const replacementPool = questions.filter(
+        question =>
+          question.level === generatorLevel &&
+          question.topic === currentQuestion.topic &&
+          question.id !== currentQuestion.id &&
+          !usedIds.has(question.id)
+      )
+
+      if (replacementPool.length === 0) {
+        return currentQuestions
+      }
+
+      const replacement =
+        replacementPool[Math.floor(Math.random() * replacementPool.length)]
 
       if (!replacement) {
         return currentQuestions
