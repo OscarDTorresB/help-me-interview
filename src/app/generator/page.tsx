@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Check, ChevronDown, ChevronUp, Copy, RefreshCw, Shuffle } from 'lucide-react'
 import {
@@ -65,17 +65,66 @@ function GeneratedQuestionCard({
   onToggleSelect,
   canReplace,
   onReplace,
+  cardRef,
 }: {
   question: Question
   selected: boolean
   onToggleSelect: () => void
   canReplace: boolean
   onReplace: () => void
+  cardRef: (node: HTMLDivElement | null) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [shortcutFeedback, setShortcutFeedback] = useState<string | null>(null)
+
+  function showShortcutFeedback(message: string) {
+    setShortcutFeedback(message)
+    window.setTimeout(() => setShortcutFeedback(null), 1200)
+  }
+
+  async function handleShortcutCopy(text: string, successMessage: string, errorMessage: string) {
+    const success = await copyToClipboard(text)
+    showShortcutFeedback(success ? successMessage : errorMessage)
+  }
+
+  function handleCardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) {
+      return
+    }
+
+    if (event.key === ' ') {
+      event.preventDefault()
+      onToggleSelect()
+      return
+    }
+
+    if (event.key === 'h' || event.key === 'H') {
+      event.preventDefault()
+      setOpen(openState => !openState)
+      return
+    }
+
+    if (event.key === 'c' || event.key === 'C') {
+      event.preventDefault()
+      void handleShortcutCopy(question.q, 'Question copied', 'Failed to copy question')
+      return
+    }
+
+    if (event.key === 'y' || event.key === 'Y') {
+      event.preventDefault()
+      void handleShortcutCopy(question.hint, 'Hint copied', 'Failed to copy hint')
+    }
+  }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300">
+    <div
+      ref={cardRef}
+      tabIndex={0}
+      data-generated-card="true"
+      onKeyDown={handleCardKeyDown}
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300 focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-slate-300/70"
+      aria-label="Generated question card"
+    >
       <div className="space-y-4">
         {/* Topic badge and question section */}
         <div className="flex flex-col items-start gap-2">
@@ -90,6 +139,8 @@ function GeneratedQuestionCard({
                 type="checkbox"
                 checked={selected}
                 onChange={onToggleSelect}
+                title="Select question (Space when card is focused)"
+                aria-label="Select question (Space when card is focused)"
                 className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
               />
               Select
@@ -98,7 +149,7 @@ function GeneratedQuestionCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <p className="text-sm leading-relaxed text-slate-900 flex-1">{question.q}</p>
-              <CopyActionButton text={question.q} title="Copy question" />
+              <CopyActionButton text={question.q} title="Copy question (C)" />
             </div>
           </div>
         </div>
@@ -113,7 +164,7 @@ function GeneratedQuestionCard({
                   {question.hint}
                 </p>
               </div>
-              <CopyActionButton text={question.hint} title="Copy hint" />
+              <CopyActionButton text={question.hint} title="Copy hint (Y)" />
             </div>
           </div>
         )}
@@ -137,11 +188,19 @@ function GeneratedQuestionCard({
             variant="ghost"
             onClick={() => setOpen(openState => !openState)}
             className="h-7 px-2.5 text-slate-500 hover:text-slate-700"
+            title={`${open ? 'Hide' : 'Show'} hint (H)`}
+            aria-label={`${open ? 'Hide' : 'Show'} hint (H)`}
           >
             {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
             {open ? 'Hide hint' : 'Show hint'}
           </Button>
         </div>
+
+        {shortcutFeedback && (
+          <p className="text-xs font-medium text-slate-500" aria-live="polite">
+            {shortcutFeedback}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -153,6 +212,11 @@ export default function GeneratorPage() {
   const [questionsPerTopic, setQuestionsPerTopic] = useState(2)
   const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([])
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([])
+  const generatedCardRefs = useRef<Array<HTMLDivElement | null>>([])
+
+  useEffect(() => {
+    generatedCardRefs.current = generatedCardRefs.current.slice(0, generatedQuestions.length)
+  }, [generatedQuestions.length])
 
   function handleGenerate() {
     if (selectedTopics.length === 0) {
@@ -230,6 +294,60 @@ export default function GeneratorPage() {
         : [...currentIds, questionId]
     )
   }
+
+  function handleGeneratedCardsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return
+    }
+
+    const target = event.target
+
+    if (!(target instanceof HTMLElement)) {
+      return
+    }
+
+    const activeCard = target.closest('[data-generated-card="true"]')
+
+    if (!(activeCard instanceof HTMLDivElement)) {
+      return
+    }
+
+    const currentIndex = generatedCardRefs.current.findIndex(card => card === activeCard)
+
+    if (currentIndex < 0) {
+      return
+    }
+
+    const movement = event.key === 'ArrowDown' ? 1 : -1
+    const nextIndex = Math.max(0, Math.min(generatedCardRefs.current.length - 1, currentIndex + movement))
+
+    if (nextIndex === currentIndex) {
+      return
+    }
+
+    const nextCard = generatedCardRefs.current[nextIndex]
+
+    if (!nextCard) {
+      return
+    }
+
+    event.preventDefault()
+    nextCard.focus()
+  }
+
+  const replaceableQuestionsByTopic = useMemo(() => {
+    const counts: Record<string, number> = {}
+
+    for (const question of questions) {
+      if (question.level !== generatorLevel) {
+        continue
+      }
+
+      counts[question.topic] = (counts[question.topic] ?? 0) + 1
+    }
+
+    return counts
+  }, [generatorLevel])
 
   const selectedGeneratedQuestions = generatedQuestions.filter(question =>
     selectedQuestionIds.includes(question.id)
@@ -395,20 +513,25 @@ export default function GeneratorPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <p className="font-medium text-slate-900">Keyboard shortcuts</p>
+              <p className="mt-1">
+                Focus a card, then use Arrow Up or Arrow Down to move between cards, Space to select, H to show or hide the hint, C to copy the question, and Y to copy the hint.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3" onKeyDown={handleGeneratedCardsKeyDown}>
               {generatedQuestions.map((generatedQuestion, index) => (
                 <GeneratedQuestionCard
                   key={generatedQuestion.id}
                   question={generatedQuestion}
                   selected={selectedQuestionIds.includes(generatedQuestion.id)}
                   onToggleSelect={() => toggleGeneratedQuestionSelection(generatedQuestion.id)}
-                  canReplace={questions.some(
-                    question =>
-                      question.level === generatorLevel &&
-                      question.topic === generatedQuestion.topic &&
-                      question.id !== generatedQuestion.id
-                  )}
+                  canReplace={(replaceableQuestionsByTopic[generatedQuestion.topic] ?? 0) > 1}
                   onReplace={() => handleReplaceQuestion(index)}
+                  cardRef={node => {
+                    generatedCardRefs.current[index] = node
+                  }}
                 />
               ))}
             </div>
@@ -425,8 +548,10 @@ export default function GeneratorPage() {
                     variant="outline"
                     onClick={() => setSelectedQuestionIds(generatedQuestions.map(question => question.id))}
                     disabled={generatedQuestions.length === 0}
+                    title="Select all generated questions"
+                    aria-label="Select all generated questions"
                   >
-                    Select all
+                    Select all questions
                   </Button>
                   <Button
                     type="button"
