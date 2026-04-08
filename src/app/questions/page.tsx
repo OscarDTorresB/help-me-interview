@@ -3,8 +3,44 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronUp, Copy, Search } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, Search } from 'lucide-react'
 import { questions, TOPICS, topicColors, copyToClipboard, type Level, type Question } from '@/lib/questions-data'
+
+function CopyActionButton({ text, title }: { text: string; title: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    const success = await copyToClipboard(text)
+
+    if (!success) {
+      return
+    }
+
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1200)
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      onClick={handleCopy}
+      className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600 shrink-0 transition-colors"
+      title={title}
+      aria-label={title}
+    >
+      <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center">
+        <Copy
+          className={`absolute size-3.5 transition-all duration-200 ${copied ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}
+        />
+        <Check
+          className={`absolute size-3.5 text-emerald-500 transition-all duration-200 ${copied ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}
+        />
+      </span>
+    </Button>
+  )
+}
 
 function QuestionCard({ q }: { q: Question }) {
   const [open, setOpen] = useState(false)
@@ -19,16 +55,7 @@ function QuestionCard({ q }: { q: Question }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <p className="text-sm text-gray-900 leading-relaxed flex-1">{q.q}</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => copyToClipboard(q.q)}
-                className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600 shrink-0"
-                title="Copy question"
-              >
-                <Copy className="size-3.5" />
-              </Button>
+              <CopyActionButton text={q.q} title="Copy question" />
             </div>
           </div>
         </div>
@@ -40,16 +67,7 @@ function QuestionCard({ q }: { q: Question }) {
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-gray-500 leading-relaxed"><span className="font-medium text-gray-600">Hint: </span>{q.hint}</p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => copyToClipboard(q.hint)}
-                className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600 shrink-0"
-                title="Copy hint"
-              >
-                <Copy className="size-3.5" />
-              </Button>
+              <CopyActionButton text={q.hint} title="Copy hint" />
             </div>
           </div>
         )}

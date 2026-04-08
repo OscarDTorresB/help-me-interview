@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ChevronDown, ChevronUp, Copy, RefreshCw, Shuffle } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, RefreshCw, Shuffle } from 'lucide-react'
 import {
   questions,
   TOPICS,
@@ -14,12 +14,62 @@ import {
   type Question,
 } from '@/lib/questions-data'
 
+function CopyActionButton({
+  text,
+  title,
+  className,
+  iconClassName,
+}: {
+  text: string
+  title: string
+  className?: string
+  iconClassName?: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    const success = await copyToClipboard(text)
+
+    if (!success) {
+      return
+    }
+
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1200)
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      onClick={handleCopy}
+      className={className ?? 'h-7 w-7 p-0 text-slate-400 hover:text-slate-600 shrink-0 transition-colors'}
+      title={title}
+      aria-label={title}
+    >
+      <span className={`relative inline-flex items-center justify-center ${iconClassName ?? 'h-4 w-4'}`}>
+        <Copy
+          className={`absolute ${iconClassName ?? 'size-4'} transition-all duration-200 ${copied ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}
+        />
+        <Check
+          className={`absolute ${iconClassName ?? 'size-4'} text-emerald-500 transition-all duration-200 ${copied ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`}
+        />
+      </span>
+    </Button>
+  )
+}
+
 function GeneratedQuestionCard({
   question,
+  selected,
+  onToggleSelect,
   canReplace,
   onReplace,
 }: {
   question: Question
+  selected: boolean
+  onToggleSelect: () => void
   canReplace: boolean
   onReplace: () => void
 }) {
@@ -30,24 +80,26 @@ function GeneratedQuestionCard({
       <div className="space-y-4">
         {/* Topic badge and question section */}
         <div className="flex flex-col items-start gap-2">
-          <span
-            className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${topicColors[question.topic] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}
-          >
-            {question.topic}
-          </span>
+          <div className="flex w-full items-start justify-between gap-2">
+            <span
+              className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${topicColors[question.topic] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}
+            >
+              {question.topic}
+            </span>
+            <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={onToggleSelect}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+              />
+              Select
+            </label>
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <p className="text-sm leading-relaxed text-slate-900 flex-1">{question.q}</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => copyToClipboard(question.q)}
-                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 shrink-0"
-                title="Copy question"
-              >
-                <Copy className="size-4" />
-              </Button>
+              <CopyActionButton text={question.q} title="Copy question" />
             </div>
           </div>
         </div>
@@ -62,16 +114,7 @@ function GeneratedQuestionCard({
                   {question.hint}
                 </p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => copyToClipboard(question.hint)}
-                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 shrink-0"
-                title="Copy hint"
-              >
-                <Copy className="size-4" />
-              </Button>
+              <CopyActionButton text={question.hint} title="Copy hint" />
             </div>
           </div>
         )}
@@ -110,10 +153,12 @@ export default function GeneratorPage() {
   const [selectedTopics, setSelectedTopics] = useState<string[]>(TOPICS)
   const [questionsPerTopic, setQuestionsPerTopic] = useState(2)
   const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([])
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([])
 
   function handleGenerate() {
     if (selectedTopics.length === 0) {
       setGeneratedQuestions([])
+      setSelectedQuestionIds([])
       return
     }
 
@@ -132,6 +177,7 @@ export default function GeneratorPage() {
     }
 
     setGeneratedQuestions(shuffleQuestions(generated))
+    setSelectedQuestionIds([])
   }
 
   function handleReplaceQuestion(index: number) {
@@ -161,6 +207,22 @@ export default function GeneratorPage() {
         : [...currentTopics, selectedTopic]
     )
   }
+
+  function toggleGeneratedQuestionSelection(questionId: number) {
+    setSelectedQuestionIds(currentIds =>
+      currentIds.includes(questionId)
+        ? currentIds.filter(id => id !== questionId)
+        : [...currentIds, questionId]
+    )
+  }
+
+  const selectedGeneratedQuestions = generatedQuestions.filter(question =>
+    selectedQuestionIds.includes(question.id)
+  )
+  const levelLabel = generatorLevel === 'senior' ? 'Senior' : 'Middle'
+  const selectedQuestionsExport = `${levelLabel} questions:\n${selectedGeneratedQuestions
+    .map(question => `- ${question.q}`)
+    .join('\n')}`
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(241,245,249,0.95),white_45%)] font-sans">
@@ -323,6 +385,8 @@ export default function GeneratorPage() {
                 <GeneratedQuestionCard
                   key={generatedQuestion.id}
                   question={generatedQuestion}
+                  selected={selectedQuestionIds.includes(generatedQuestion.id)}
+                  onToggleSelect={() => toggleGeneratedQuestionSelection(generatedQuestion.id)}
                   canReplace={questions.some(
                     question =>
                       question.level === generatorLevel &&
@@ -332,6 +396,48 @@ export default function GeneratorPage() {
                   onReplace={() => handleReplaceQuestion(index)}
                 />
               ))}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-600">
+                  {selectedGeneratedQuestions.length} selected question{selectedGeneratedQuestions.length === 1 ? '' : 's'}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedQuestionIds(generatedQuestions.map(question => question.id))}
+                    disabled={generatedQuestions.length === 0}
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedQuestionIds([])}
+                    disabled={selectedGeneratedQuestions.length === 0}
+                  >
+                    Clear selected
+                  </Button>
+                </div>
+              </div>
+
+              {selectedGeneratedQuestions.length > 0 && (
+                <div className="relative mt-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <CopyActionButton
+                    text={selectedQuestionsExport}
+                    title="Copy selected questions"
+                    className="absolute right-2.5 top-2.5 h-8 w-8 p-0 text-slate-400 hover:text-slate-100"
+                    iconClassName="size-4"
+                  />
+                  <pre className="pr-10 text-sm leading-6 text-slate-100 whitespace-pre-wrap">
+                    {selectedQuestionsExport}
+                  </pre>
+                </div>
+              )}
             </div>
           </section>
         )}

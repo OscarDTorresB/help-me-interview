@@ -162,10 +162,14 @@ export function getReplacementQuestion(level: Level, topic: string, currentId: n
   return replacementPool[Math.floor(Math.random() * replacementPool.length)]
 }
 
-export function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text).catch(() => {
+export async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
     console.error('Failed to copy to clipboard')
-  })
+    return false
+  }
 }
 
 export const topicColors: Record<string, string> = {
