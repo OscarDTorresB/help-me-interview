@@ -8,11 +8,19 @@ export type InterviewTool = {
 
 export const interviewTools: InterviewTool[] = [
   {
-    id: "interview-questions",
-    title: "Interview Questions",
+    id: "questions-bank",
+    title: "Questions Bank",
     description:
-      "Browse practical technical interview questions, or generate a random topic-based list with one click.",
+      "Browse practical technical interview questions by topic and level.",
     href: "/questions",
+    status: "available",
+  },
+  {
+    id: "questions-generator",
+    title: "Questions Generator",
+    description:
+      "Generate a random topic-based interview question list with one click, then replace any question with another from the same topic.",
+    href: "/generator",
     status: "available",
   },
 ]
