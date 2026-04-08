@@ -144,7 +144,6 @@ const questions: Question[] = [
 ]
 
 const TOPICS = [...new Set(questions.map(q => q.topic))]
-const DEFAULT_RANDOM_COUNT = 6
 
 function shuffleQuestions(pool: Question[]) {
   const shuffled = [...pool]
@@ -155,12 +154,6 @@ function shuffleQuestions(pool: Question[]) {
   }
 
   return shuffled
-}
-
-function getQuestionsForSelection(level: Level, topics: string[]) {
-  return questions.filter(
-    question => question.level === level && topics.includes(question.topic)
-  )
 }
 
 function getReplacementQuestion(level: Level, topic: string, currentId: number) {
@@ -282,7 +275,10 @@ export default function App() {
   const [level, setLevel] = useState<Level>('mid')
   const [topic, setTopic] = useState('All')
   const [search, setSearch] = useState('')
+  const [generatorOpen, setGeneratorOpen] = useState(false)
+  const [generatorLevel, setGeneratorLevel] = useState<Level>('mid')
   const [selectedTopics, setSelectedTopics] = useState<string[]>(TOPICS)
+  const [questionsPerTopic, setQuestionsPerTopic] = useState(2)
   const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([])
 
   const levelTopics = ['All', ...TOPICS.filter(t =>
@@ -299,17 +295,27 @@ export default function App() {
     return true
   })
 
-  const selectedPool = getQuestionsForSelection(level, selectedTopics)
-
   function handleGenerate() {
-    if (selectedPool.length === 0) {
+    if (selectedTopics.length === 0) {
       setGeneratedQuestions([])
       return
     }
 
-    setGeneratedQuestions(
-      shuffleQuestions(selectedPool).slice(0, Math.min(DEFAULT_RANDOM_COUNT, selectedPool.length))
-    )
+    const generated: Question[] = []
+
+    for (const selectedTopic of selectedTopics) {
+      const topicQuestions = questions.filter(
+        q => q.level === generatorLevel && q.topic === selectedTopic
+      )
+
+      if (topicQuestions.length === 0) continue
+
+      const shuffled = shuffleQuestions(topicQuestions)
+      const count = Math.min(questionsPerTopic, topicQuestions.length)
+      generated.push(...shuffled.slice(0, count))
+    }
+
+    setGeneratedQuestions(shuffleQuestions(generated))
   }
 
   function handleReplaceQuestion(index: number) {
@@ -320,7 +326,7 @@ export default function App() {
         return currentQuestions
       }
 
-      const replacement = getReplacementQuestion(level, currentQuestion.topic, currentQuestion.id)
+      const replacement = getReplacementQuestion(generatorLevel, currentQuestion.topic, currentQuestion.id)
 
       if (!replacement) {
         return currentQuestions
@@ -362,80 +368,148 @@ export default function App() {
           </div>
         </div>
 
-        <section className="mb-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Random list
-                </p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
-                  Generate questions on demand
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                  Choose the topics that are allowed, then generate a mixed list for the current level. Replace any question with another from the same topic at any time.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => setSelectedTopics(TOPICS)}>
-                  Select all topics
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedTopics([])}>
-                  Clear selection
-                </Button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 lg:max-w-xs">
-              <p className="font-medium text-slate-900">Current selection</p>
-              <p className="mt-1">
-                {selectedTopics.length === 0
-                  ? 'No topics selected.'
-                  : `${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} selected, ${selectedPool.length} question${selectedPool.length === 1 ? '' : 's'} available.`}
+        <section className="mb-8 rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={() => setGeneratorOpen(o => !o)}
+            className="w-full flex items-center justify-between p-5 sm:p-6 hover:bg-slate-50 transition-colors rounded-3xl"
+          >
+            <div className="text-left">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Random list
               </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+                Generate questions on demand
+              </h2>
             </div>
-          </div>
+            <div className="shrink-0 text-slate-400">
+              {generatorOpen ? (
+                <ChevronUp className="size-5" />
+              ) : (
+                <ChevronDown className="size-5" />
+              )}
+            </div>
+          </button>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            {TOPICS.map(topicName => {
-              const isSelected = selectedTopics.includes(topicName)
+          {generatorOpen && (
+            <div className="border-t border-slate-100 px-5 pb-5 pt-5 sm:px-6 sm:pb-6">
+              <div className="space-y-5">
+                <p className="text-sm leading-6 text-slate-500">
+                  Choose your preferred seniority level, select topics, and set how many questions to generate per topic (1-4).
+                </p>
 
-              return (
-                <button
-                  key={topicName}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 mb-2">
+                    Seniority level
+                  </label>
+                  <div className="flex gap-2">
+                    {(['mid', 'senior'] as Level[]).map(lv => (
+                      <button
+                        key={lv}
+                        type="button"
+                        onClick={() => setGeneratorLevel(lv)}
+                        className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                          generatorLevel === lv
+                            ? lv === 'mid'
+                              ? 'border-sky-200 bg-sky-50 text-sky-800'
+                              : 'border-violet-200 bg-violet-50 text-violet-800'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        {lv === 'mid' ? 'Middle' : 'Senior'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 mb-2">
+                    Questions per topic
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max="4"
+                      value={questionsPerTopic}
+                      onChange={e => setQuestionsPerTopic(Number(e.target.value))}
+                      className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="min-w-fit rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-900">
+                      {questionsPerTopic}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 mb-3">
+                    Topics
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {TOPICS.map(topicName => {
+                      const isSelected = selectedTopics.includes(topicName)
+
+                      return (
+                        <button
+                          key={topicName}
+                          type="button"
+                          onClick={() => toggleTopicSelection(topicName)}
+                          aria-pressed={isSelected}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isSelected
+                              ? 'border-slate-900 bg-slate-900 text-white'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
+                          }`}
+                        >
+                          {topicName}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedTopics(TOPICS)}
+                      className="text-xs"
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedTopics([])}
+                      className="text-xs"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <p className="font-medium text-slate-900">Ready to generate</p>
+                  <p className="mt-1">
+                    {selectedTopics.length === 0
+                      ? 'Select at least one topic to generate questions.'
+                      : `Generate ${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} × ${questionsPerTopic} question${questionsPerTopic === 1 ? '' : 's'} = ~${selectedTopics.length * questionsPerTopic} question${selectedTopics.length * questionsPerTopic === 1 ? '' : 's'}.`}
+                  </p>
+                </div>
+
+                <Button
                   type="button"
-                  onClick={() => toggleTopicSelection(topicName)}
-                  aria-pressed={isSelected}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    isSelected
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'
-                  }`}
+                  size="lg"
+                  onClick={handleGenerate}
+                  disabled={selectedTopics.length === 0}
+                  className="w-full"
                 >
-                  {topicName}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">
-              {selectedTopics.length === 0
-                ? 'Select at least one topic to generate a list.'
-                : `Generate up to ${Math.min(DEFAULT_RANDOM_COUNT, selectedPool.length)} question${Math.min(DEFAULT_RANDOM_COUNT, selectedPool.length) === 1 ? '' : 's'} from the selected topics.`}
-            </p>
-            <Button
-              type="button"
-              size="lg"
-              onClick={handleGenerate}
-              disabled={selectedPool.length === 0}
-              className="w-full sm:w-auto"
-            >
-              <Shuffle className="size-4" />
-              Generate random list
-            </Button>
-          </div>
+                  <Shuffle className="size-4" />
+                  Generate random list
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
         {generatedQuestions.length > 0 && (
@@ -461,7 +535,7 @@ export default function App() {
                   question={generatedQuestion}
                   canReplace={questions.some(
                     question =>
-                      question.level === level &&
+                      question.level === generatorLevel &&
                       question.topic === generatedQuestion.topic &&
                       question.id !== generatedQuestion.id
                   )}
@@ -495,9 +569,8 @@ export default function App() {
                 onClick={() => {
                   setLevel(lv)
                   setTopic('All')
-                  setGeneratedQuestions([])
                 }}
-                className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                   level === lv
                     ? lv === 'mid'
                       ? 'border-sky-200 bg-sky-50 text-sky-800'
