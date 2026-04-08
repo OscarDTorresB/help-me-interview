@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronUp, RefreshCw, Search, Shuffle } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, RefreshCw, Search, Shuffle } from 'lucide-react'
 
 type Level = 'mid' | 'senior'
 
@@ -169,6 +169,12 @@ function getReplacementQuestion(level: Level, topic: string, currentId: number) 
   return replacementPool[Math.floor(Math.random() * replacementPool.length)]
 }
 
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text).catch(() => {
+    console.error('Failed to copy to clipboard')
+  })
+}
+
 const topicColors: Record<string, string> = {
   'JS Core': 'bg-amber-50 text-amber-800 border-amber-200',
   'Prototypes & OOP': 'bg-orange-50 text-orange-800 border-orange-200',
@@ -225,48 +231,80 @@ function GeneratedQuestionCard({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300">
-      <div className="flex items-start gap-3">
-        <span
-          className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${topicColors[question.topic] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}
-        >
-          {question.topic}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm leading-relaxed text-slate-900">{question.q}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onReplace}
-              disabled={!canReplace}
-              className="h-7 px-2.5"
-            >
-              <RefreshCw className="size-3.5" />
-              Replace
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setOpen(openState => !openState)}
-              className="h-7 px-2.5 text-slate-500 hover:text-slate-700"
-            >
-              {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-              {open ? 'Hide hint' : 'Show hint'}
-            </Button>
+      <div className="space-y-4">
+        {/* Topic badge and question section */}
+        <div className="flex flex-col items-start gap-2">
+          <span
+            className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 mt-0.5 ${topicColors[question.topic] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}
+          >
+            {question.topic}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <p className="text-sm leading-relaxed text-slate-900 flex-1">{question.q}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => copyToClipboard(question.q)}
+                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 shrink-0"
+                title="Copy question"
+              >
+                <Copy className="size-4" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {open && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
-          <p className="text-xs leading-relaxed text-slate-500">
-            <span className="font-medium text-slate-600">Hint: </span>
-            {question.hint}
-          </p>
+        {/* Hint section */}
+        {open && (
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs leading-relaxed text-slate-500">
+                  <span className="font-medium text-slate-600">Hint: </span>
+                  {question.hint}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => copyToClipboard(question.hint)}
+                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 shrink-0"
+                title="Copy hint"
+              >
+                <Copy className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Action buttons section */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onReplace}
+            disabled={!canReplace}
+            className="h-7 px-2.5"
+          >
+            <RefreshCw className="size-3.5" />
+            Replace
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setOpen(openState => !openState)}
+            className="h-7 px-2.5 text-slate-500 hover:text-slate-700"
+          >
+            {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            {open ? 'Hide hint' : 'Show hint'}
+          </Button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
