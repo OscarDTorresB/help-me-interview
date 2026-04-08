@@ -163,33 +163,17 @@ function getQuestionsForSelection(level: Level, topics: string[]) {
   )
 }
 
-function getReplacementQuestion(
-  level: Level,
-  topic: string,
-  currentId: number,
-  excludedIds: number[] = []
-) {
-  const preferredPool = questions.filter(
+function getReplacementQuestion(level: Level, topic: string, currentId: number) {
+  const replacementPool = questions.filter(
     question =>
-      question.level === level &&
-      question.topic === topic &&
-      question.id !== currentId &&
-      !excludedIds.includes(question.id)
+      question.level === level && question.topic === topic && question.id !== currentId
   )
 
-  if (preferredPool.length > 0) {
-    return preferredPool[Math.floor(Math.random() * preferredPool.length)]
-  }
-
-  const fallbackPool = questions.filter(
-    question => question.level === level && question.topic === topic && question.id !== currentId
-  )
-
-  if (fallbackPool.length === 0) {
+  if (replacementPool.length === 0) {
     return null
   }
 
-  return fallbackPool[Math.floor(Math.random() * fallbackPool.length)]
+  return replacementPool[Math.floor(Math.random() * replacementPool.length)]
 }
 
 const topicColors: Record<string, string> = {
@@ -336,14 +320,7 @@ export default function App() {
         return currentQuestions
       }
 
-      const replacement = getReplacementQuestion(
-        level,
-        currentQuestion.topic,
-        currentQuestion.id,
-        currentQuestions
-          .filter((_, currentIndex) => currentIndex !== index)
-          .map(question => question.id)
-      )
+      const replacement = getReplacementQuestion(level, currentQuestion.topic, currentQuestion.id)
 
       if (!replacement) {
         return currentQuestions
